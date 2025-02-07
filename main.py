@@ -3,9 +3,12 @@ import time
 from datetime import datetime
 import csv
 import os
+import argparse
 from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
 
 stop_monitoring = False
+queue = Queue()
 
 def get_run_number():
     if not os.path.isfile('process_info.csv'):
@@ -16,9 +19,11 @@ def get_run_number():
         last_line = line
         last_val = last_line.split(',')[0]
         return int(last_val) + 1 if last_val != 'Iter' else 1
+
 def get_process_names():
     vals = input("Enter the names of the processes to track (comma separated, e.g: duckduckgo,chrome): ").lower().split(',')
     return [val.strip() for val in vals]
+
 def get_process_id(process):
     for proc in psutil.process_iter(['pid', 'name']):
         process_info = proc.info
@@ -28,12 +33,11 @@ def get_process_id(process):
     print("Process ID Not Found")
     return None
 
-def get_process_info(pid):
-    try:
-        process = psutil.Process(pid)
+def get_process_info(process, interval):
+    with process.oneshot():
         name = process.name()
-        cpu_usage = process.cpu_percent(interval=1)
-        memory_info = process.memory_info().rss
+        cpu_usage = process.cpu_percent(interval=interval)
+        memory_info = process.memory_percent(memtype='rss')
         disk_io = process.io_counters()
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return {
@@ -46,34 +50,30 @@ def get_process_info(pid):
             'disk_read_bytes': disk_io.read_bytes,
             'disk_write_bytes': disk_io.write_bytes
         }
-    except psutil.NoSuchProcess:
-        return None
 
-def monitor_process(process_name, runnumber, writer):
+def monitor_process(process_name, runnumber, interval):
     global stop_monitoring
     pid = get_process_id(process_name)
+    process = psutil.Process(pid)
     while not stop_monitoring:
-        if pid:
-            process_info = get_process_info(pid)
-            if process_info:
-                writer.writerow([
-                    runnumber,
-                    process_info['time'],
-                    process_info['process'],
-                    process_info['cpu_usage'],
-                    process_info['memory_usage'],
-                    process_info['disk_read_count'],
-                    process_info['disk_write_count'],
-                    process_info['disk_read_bytes'],
-                    process_info['disk_write_bytes']
-                ])
-                print(process_info)
-            else:
-                print(f"Process with PID {pid} not found. Trying to find new PID.")
-                pid = get_process_id(process_name)
+        process_info = get_process_info(process, interval)
+        if process_info:
+            queue.put([
+                runnumber,
+                process_info['time'],
+                process_info['process'],
+                process_info['cpu_usage'],
+                process_info['memory_usage'],
+                process_info['disk_read_count'],
+                process_info['disk_write_count'],
+                process_info['disk_read_bytes'],
+                process_info['disk_write_bytes']
+            ])
+            print(process_info)
         else:
+            print(f"Process with PID {pid} not found. Trying to find new PID.")
             pid = get_process_id(process_name)
-        time.sleep(10)
+        time.sleep(interval)
 
 def listen_for_exit():
     global stop_monitoring
@@ -81,24 +81,33 @@ def listen_for_exit():
         user_input = input().strip().lower()
         if user_input == 'exit' or user_input == 'e':
             stop_monitoring = True
-            print("Monitoring stopped.")
+            print("Input heard. Waiting for all threads to finish/write outputs to csv.")
             break
 
-def main():
-    runnumber = get_run_number()
-    process_names = get_process_names()
-    
+def write_to_csv():
     file_exists = os.path.isfile('process_info.csv')
     with open('process_info.csv', mode='a', newline='') as file:
         writer = csv.writer(file)
         if not file_exists:
             writer.writerow(['Iter', 'Time', 'Process', 'CPU Usage', 'Memory Usage', 'Disk Read Count', 'Disk Write Count', 'Disk Read Bytes', 'Disk Write Bytes'])
+        while not stop_monitoring or not queue.empty():
+            while not queue.empty():
+                writer.writerow(queue.get())
 
-        print(f"Monitoring started with Iter-id {runnumber}. Type 'exit' to stop.")
+def main():
+    parser = argparse.ArgumentParser(description="Process Monitoring Script")
+    parser.add_argument('-i', '--interval', type=float, default=5, help='Interval between each survey in seconds')
+    args = parser.parse_args()
 
-        with ThreadPoolExecutor(max_workers=len(process_names) + 1) as executor:
-            for process_name in process_names:
-                executor.submit(monitor_process, process_name.strip(), runnumber, writer)
-            executor.submit(listen_for_exit)
+    runnumber = get_run_number()
+    process_names = get_process_names()
+
+    print(f"Monitoring started with Iter-id {runnumber}. Type 'exit' to stop.")
+
+    with ThreadPoolExecutor(max_workers=len(process_names) + 2) as executor:
+        for process_name in process_names:
+            executor.submit(monitor_process, process_name.strip(), runnumber, args.interval)
+        executor.submit(listen_for_exit)
+        executor.submit(write_to_csv)
 
 main()
