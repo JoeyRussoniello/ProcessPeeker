@@ -5,7 +5,7 @@ A basic python file built on the `psutil` module to track major info about proce
 ## Installation and Dependencies
 Download the ProcessPeeker repository by entering the following commands into git.
 ```git
-git clone REPONAME
+git clone https://github.com/JoeyRussoniello/ProcessPeeker
 cd ProcessPeeker
 ```
 
