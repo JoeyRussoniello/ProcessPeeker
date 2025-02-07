@@ -4,8 +4,12 @@ from datetime import datetime
 import csv
 import os
 import argparse
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 stop_monitoring = False
 queue = Queue()
@@ -28,9 +32,9 @@ def get_process_id(process):
     for proc in psutil.process_iter(['pid', 'name']):
         process_info = proc.info
         if process in process_info['name'].lower():
-            print(f"PID: {process_info['pid']}, Name: {process_info['name']}")
+            logging.info(f"PID: {process_info['pid']}, Name: {process_info['name']}")
             return process_info['pid']
-    print("Process ID Not Found")
+    logging.info("Process ID Not Found")
     return None
 
 def get_process_info(process, interval):
@@ -69,9 +73,9 @@ def monitor_process(process_name, runnumber, interval):
                 process_info['disk_read_bytes'],
                 process_info['disk_write_bytes']
             ])
-            print(process_info)
+            logging.info(process_info)
         else:
-            print(f"Process with PID {pid} not found. Trying to find new PID.")
+            logging.info(f"Process with PID {pid} not found. Trying to find new PID.")
             pid = get_process_id(process_name)
         time.sleep(interval)
 
@@ -81,7 +85,7 @@ def listen_for_exit():
         user_input = input().strip().lower()
         if user_input == 'exit' or user_input == 'e':
             stop_monitoring = True
-            print("Input heard. Waiting for all threads to finish/write outputs to csv.")
+            logging.info("Input heard. Waiting for all threads to finish/write outputs to csv.")
             break
 
 def write_to_csv():
@@ -102,7 +106,7 @@ def main():
     runnumber = get_run_number()
     process_names = get_process_names()
 
-    print(f"Monitoring started with Iter-id {runnumber}. Type 'exit' to stop.")
+    logging.info(f"Monitoring started with Iter-id {runnumber}. Type 'exit' to stop.")
 
     with ThreadPoolExecutor(max_workers=len(process_names) + 2) as executor:
         for process_name in process_names:
