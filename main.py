@@ -7,6 +7,15 @@ import os
 
 stop_monitoring = False
 
+def get_run_number():
+    if not os.path.isfile('process_info.csv'):
+        return 1
+    with open('process_info.csv',mode='r') as f:
+        for line in f:
+            pass
+        last_line = line
+        last_val = last_line.split(',')[0]
+        return int(last_val) + 1 if last_val != 'Iter' else 1
 def get_process_id(process):
     """
     Get the process ID for a given process name.
@@ -55,7 +64,7 @@ def get_process_info(pid):
     except psutil.NoSuchProcess:
         return None
 
-def monitor_process(process_name, writer):
+def monitor_process(process_name, runnumber,writer):
     """
     Monitor the process and write its information to a CSV file.
 
@@ -70,6 +79,7 @@ def monitor_process(process_name, writer):
             process_info = get_process_info(pid)
             if process_info:
                 writer.writerow([
+                    runnumber,
                     process_info['time'],
                     process_info['process'],
                     process_info['cpu_usage'],
@@ -103,18 +113,19 @@ def main():
     """
     Main function to start the monitoring process.
     """
+    runnumber = get_run_number()
     process_name = input("Enter the name of the process to track (e.g: duckduckgo or chrome): ").strip().lower()
     
     file_exists = os.path.isfile('process_info.csv')
     with open('process_info.csv', mode='a', newline='') as file:
         writer = csv.writer(file)
         if not file_exists:
-            writer.writerow(['Time', 'Process', 'CPU Usage', 'Memory Usage', 'Disk Read Count', 'Disk Write Count', 'Disk Read Bytes', 'Disk Write Bytes'])
+            writer.writerow(['Iter','Time', 'Process', 'CPU Usage', 'Memory Usage', 'Disk Read Count', 'Disk Write Count', 'Disk Read Bytes', 'Disk Write Bytes'])
         
         print("Monitoring started. Type 'exit' to stop.")
         
         # Start the monitoring thread
-        monitor_thread = threading.Thread(target=monitor_process, args=(process_name, writer))
+        monitor_thread = threading.Thread(target=monitor_process, args=(process_name, runnumber,writer))
         monitor_thread.start()
         
         # Start the input listening thread
