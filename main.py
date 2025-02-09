@@ -54,7 +54,7 @@ def get_process_id(process):
     logging.info("Process ID Not Found")
     return None
 
-def get_process_info(process, interval):
+def get_process_info(process:psutil.Process, interval):
     """
     Get the performance information for a given process.
     Returns a dictionary with process information.
@@ -62,8 +62,8 @@ def get_process_info(process, interval):
     with process.oneshot():
         name = process.name()
         cpu_usage = process.cpu_percent(interval=interval)
-        memory_info = process.memory_percent(memtype='rss')
-        disk_io = process.io_counters()
+        memory_info = process.memory_percent(memtype='rss',interval=interval)
+        disk_io = process.io_counters(interval=interval)
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return {
             'time': current_time,
