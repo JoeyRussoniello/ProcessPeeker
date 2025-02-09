@@ -54,27 +54,31 @@ def get_process_id(process):
     logging.info("Process ID Not Found")
     return None
 
-def get_process_info(process:psutil.Process, interval):
+def get_process_info(process, interval):
     """
     Get the performance information for a given process.
     Returns a dictionary with process information.
     """
-    with process.oneshot():
-        name = process.name()
-        cpu_usage = process.cpu_percent(interval=interval)
-        memory_info = process.memory_percent(memtype='rss',interval=interval)
-        disk_io = process.io_counters(interval=interval)
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return {
-            'time': current_time,
-            'process': name,
-            'cpu_usage': cpu_usage,
-            'memory_usage': memory_info,
-            'disk_read_count': disk_io.read_count,
-            'disk_write_count': disk_io.write_count,
-            'disk_read_bytes': disk_io.read_bytes,
-            'disk_write_bytes': disk_io.write_bytes
-        }
+    try:
+        with process.oneshot():
+            name = process.name()
+            cpu_usage = process.cpu_percent(interval=interval)
+            memory_info = process.memory_percent(memtype='rss')
+            disk_io = process.io_counters()
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return {
+                'time': current_time,
+                'process': name,
+                'cpu_usage': cpu_usage,
+                'memory_usage': memory_info,
+                'disk_read_count': disk_io.read_count,
+                'disk_write_count': disk_io.write_count,
+                'disk_read_bytes': disk_io.read_bytes,
+                'disk_write_bytes': disk_io.write_bytes
+            }
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+        logging.error(f"Error retrieving process info: {e}")
+        return None
 
 def monitor_process(process_name, runnumber, interval):
     """
@@ -83,6 +87,9 @@ def monitor_process(process_name, runnumber, interval):
     """
     global stop_monitoring
     pid = get_process_id(process_name)
+    if pid is None:
+        logging.error(f"Process {process_name} not found.")
+        return
     process = psutil.Process(pid)
     while not stop_monitoring:
         process_info = get_process_info(process, interval)
@@ -102,6 +109,8 @@ def monitor_process(process_name, runnumber, interval):
         else:
             logging.info(f"Process with PID {pid} not found. Trying to find new PID.")
             pid = get_process_id(process_name)
+            if pid is not None:
+                process = psutil.Process(pid)
         time.sleep(interval)
 
 def listen_for_exit():
