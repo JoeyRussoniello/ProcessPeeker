@@ -1,3 +1,7 @@
+"""
+ProcessPeeker: A script to monitor process performance using psutil.
+"""
+
 import psutil
 import time
 from datetime import datetime
@@ -15,6 +19,11 @@ stop_monitoring = False
 queue = Queue()
 
 def get_run_number():
+    """
+    Get the run number for the current execution.
+    If the CSV file does not exist, return 1.
+    Otherwise, return the next iteration number based on the last entry in the CSV file.
+    """
     if not os.path.isfile('process_info.csv'):
         return 1
     with open('process_info.csv', mode='r') as f:
@@ -25,10 +34,18 @@ def get_run_number():
         return int(last_val) + 1 if last_val != 'Iter' else 1
 
 def get_process_names():
+    """
+    Prompt the user to enter the names of the processes to track.
+    Returns a list of process names.
+    """
     vals = input("Enter the names of the processes to track (comma separated, e.g: duckduckgo,chrome): ").lower().split(',')
     return [val.strip() for val in vals]
 
 def get_process_id(process):
+    """
+    Get the process ID for a given process name.
+    Returns the process ID if found, otherwise returns None.
+    """
     for proc in psutil.process_iter(['pid', 'name']):
         process_info = proc.info
         if process in process_info['name'].lower():
@@ -38,6 +55,10 @@ def get_process_id(process):
     return None
 
 def get_process_info(process, interval):
+    """
+    Get the performance information for a given process.
+    Returns a dictionary with process information.
+    """
     with process.oneshot():
         name = process.name()
         cpu_usage = process.cpu_percent(interval=interval)
@@ -56,6 +77,10 @@ def get_process_info(process, interval):
         }
 
 def monitor_process(process_name, runnumber, interval):
+    """
+    Monitor the performance of a given process.
+    Collects process information at specified intervals and puts it into a queue.
+    """
     global stop_monitoring
     pid = get_process_id(process_name)
     process = psutil.Process(pid)
@@ -80,6 +105,10 @@ def monitor_process(process_name, runnumber, interval):
         time.sleep(interval)
 
 def listen_for_exit():
+    """
+    Listen for user input to stop the monitoring process.
+    Sets the stop_monitoring flag to True when 'exit' or 'e' is entered.
+    """
     global stop_monitoring
     while True:
         user_input = input().strip().lower()
@@ -89,6 +118,10 @@ def listen_for_exit():
             break
 
 def write_to_csv():
+    """
+    Write the collected process information to a CSV file.
+    Continues writing until monitoring is stopped and the queue is empty.
+    """
     file_exists = os.path.isfile('process_info.csv')
     with open('process_info.csv', mode='a', newline='') as file:
         writer = csv.writer(file)
@@ -99,6 +132,9 @@ def write_to_csv():
                 writer.writerow(queue.get())
 
 def main():
+    """
+    Main function to parse arguments, get process names, and start monitoring.
+    """
     parser = argparse.ArgumentParser(description="Process Monitoring Script")
     parser.add_argument('-i', '--interval', type=float, default=5, help='Interval between each survey in seconds')
     args = parser.parse_args()
